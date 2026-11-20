@@ -1,3 +1,4 @@
+
 name: Build Study Tracker APK
 
 on:
@@ -28,16 +29,31 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Extract Android Project ZIP
+        run: |
+          ZIP_FILE=$(find . -type f -iname "*.zip" \
+            -not -path "./.git/*" -print -quit)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "Project ZIP not found!"
+            exit 1
+          fi
+
+          mkdir -p "$RUNNER_TEMP/studytracker"
+          unzip -q "$ZIP_FILE" -d "$RUNNER_TEMP/studytracker"
+
       - name: Locate Android Project
         id: project
-        shell: bash
         run: |
-          PROJECT=$(find . -name settings.gradle \
-            -not -path '*/.gradle/*' \
+          PROJECT=$(find "$RUNNER_TEMP/studytracker" \
+            -type f \( -name settings.gradle \
+            -o -name settings.gradle.kts \) \
             -print -quit)
 
           if [ -z "$PROJECT" ]; then
-            echo "settings.gradle not found!"
+            echo "Gradle project not found inside ZIP!"
+            echo "ZIP structure:"
+            find "$RUNNER_TEMP/studytracker" -maxdepth 4 -type f
             exit 1
           fi
 
@@ -45,9 +61,14 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          gradle --no-daemon \
-            -p "${{ steps.project.outputs.dir }}" \
-            assembleDebug
+          cd "${{ steps.project.outputs.dir }}"
+
+          if [ -f gradlew ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug
+          else
+            gradle assembleDebug
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
